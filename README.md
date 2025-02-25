@@ -1,6 +1,8 @@
 # MonoDeMB
 
-MonoDeMB: Comprehensive Monocular DepthMap Benchmark
+This repository provides source code for "MonoDeMB: Comprehensive Monocular DepthMap Benchmark" paper
+
+![scheme](figs/pipeline_scheme.png)
 
 ## Project Structure
 
