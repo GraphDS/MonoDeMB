@@ -1,4 +1,4 @@
-from .model import Metric3DWrapper
+from .model import Metric3DV2Wrapper
 from .utils import process_image
 
-__all__ = ["Metric3DWrapper", "process_image"]
+__all__ = ["Metric3DV2Wrapper", "process_image"]

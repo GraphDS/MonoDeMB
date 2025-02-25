@@ -25,7 +25,7 @@ MODEL_REGISTRY = {
         "variants": ["Original", "LCM"]
     },
     "metric3dv2": {
-        "module": "src.models.metric3d_wrapper",
+        "module": "src.models.metric3d_v2_wrapper",
         "class": "Metric3DV2Wrapper",
         "variants": ["vit_small", "vit_base", "vit_large"]
     },
