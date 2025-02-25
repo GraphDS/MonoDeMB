@@ -42,7 +42,7 @@ Where:
    - Naming convention: `001.png`, `002.png`, ..., `024.png`
 
 ## Dataset Statistics
-- **Total number of scenes**: 100
+- **Total number of scenes**: 300 (metrics gained on 100)
 - **Each scene contains multiple sequential frames**
 - **One-to-one correspondence between RGB and depth images**
 
