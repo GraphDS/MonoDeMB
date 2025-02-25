@@ -148,7 +148,7 @@ class Synth2Dataset(BaseDataset):
             print("Synth2 dataset already exists.")
             return
 
-        url = "https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/dataset24_new.tar"
+        url = "https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2.tar.gz"
         print("Downloading Synth2 dataset...")
         download_and_extract(
             url=url,

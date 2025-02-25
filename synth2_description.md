@@ -6,22 +6,21 @@ The Synth2 dataset is organized into a structured format containing RGB images a
 ## Directory Structure
 ```
 synth2_dataset/
-├── synth2_rgb/
-│   └── [scene_id]/
-│       └── images/
-│           ├── 001.jpeg
-│           ├── 002.jpeg
-│           ├── 003.jpeg
-│           ├── ...
-│           ├── 024.jpeg
-└── synth2_depth/
-    └── [scene_id]/
-        └── depth_maps/
-            ├── 001.png
-            ├── 002.png
-            ├── 003.png
-            ├── ...
-            ├── 024.png
+├── [UUID]/                 # Scene ID (e.g., 016aa8df34e946faa02a145bdabe4b48)
+│   ├── rgb/                # RGB images directory
+│   │   ├── 1.jpeg
+│   │   ├── 2.jpeg
+│   │   ├── ...
+│   │   └── 24.jpeg
+│   └── gt/            # Ground truth depth maps
+│       ├── 1.png
+│       ├── 2.png
+│       ├── ...
+│       └── 24.png
+├── [UUID2]/                # Another scene
+│   ├── rgb/
+│   └── gt/
+└── ...
 ```
 
 Where:

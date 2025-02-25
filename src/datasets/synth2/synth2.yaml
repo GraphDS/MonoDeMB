@@ -1,5 +1,5 @@
 paths:
-  root_dir: data/synth2_dataset
+  root_dir: data/synth2
   train: train
   val: val
   test: test

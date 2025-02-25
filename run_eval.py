@@ -31,7 +31,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Benchmark depth estimation models')
     
     # Dataset arguments
-    parser.add_argument('--dataset-config', type=str, default='src/datasets/diode/diode.yaml',
+    parser.add_argument('--dataset-config', type=str, default='src/datasets/synth2/synth2.yaml',
                        help='Path to dataset config')
     parser.add_argument('--batch-size', type=int, default=1,
                        help='Batch size for testing')
