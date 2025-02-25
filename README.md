@@ -42,7 +42,7 @@ This repository provides source code for "MonoDeMB: Comprehensive Monocular Dept
 
 ## Quick Links
 - For detailed guidance on extending the framework, see the sections below
-- For detailed dataset information, look at [DATASETS.md](DATASETS.md)
+- For detailed dataset information, look at [DATASETS.md](datasets.md)
 
 # Extending the Framework
 
