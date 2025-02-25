@@ -61,7 +61,7 @@ File formats:
 ```
 
 ## 4. ETH3D
-
+```
 ETH3D/
 ├── rgb/
 │   ├── scene_name/                    # Example: 'courtyard'
@@ -87,7 +87,7 @@ File formats:
   * Stored as raw binary data in row-major order
   * Invalid depth values are set to infinity
   * Fixed dimensions of 4032×6048 pixels
-
+```
 ## 5. Synth2
 
 Check out [separate description](synth2_description.md)
