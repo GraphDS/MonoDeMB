@@ -1,0 +1,10 @@
+__pycache__/
+output/
+dataset_vis/
+benchmark_results/
+*analysis/
+download*
+virt_envs/
+weights/
+data/
+.pytest_cache/

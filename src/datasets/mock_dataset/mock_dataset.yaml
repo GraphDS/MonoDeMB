@@ -1,0 +1,13 @@
+name: 'Mock Dataset'
+description: 'Mock dataset for testing depth estimation'
+
+paths:
+  root_dir: 'figs/mock_dataset_data'  # Will be created automatically
+  train: 'train'
+  val: 'val'
+  test: 'test'
+
+preprocessing:
+  rgb_mean: [0.485, 0.456, 0.406]  # ImageNet stats
+  rgb_std: [0.229, 0.224, 0.225]
+  target_size: [480, 640]  # Common depth estimation size

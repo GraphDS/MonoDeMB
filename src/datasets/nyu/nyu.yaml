@@ -1,0 +1,14 @@
+name: 'NYU Depth V2'
+description: 'NYU Depth V2 dataset for indoor scene depth estimation'
+
+paths:
+  root_dir: 'data/nyuv2'
+  train: 'train'
+  val: 'val'
+  test: 'official_splits/test'
+
+preprocessing:
+  rgb_mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+  rgb_std: [0.229, 0.224, 0.225]   # ImageNet normalization
+  target_size: [448, 448]          # Standard size for many depth estimation models
+  depth_scale: 1000.0              # NYU depths are stored in millimeters, need to convert to meters
