@@ -39,23 +39,10 @@ class DepthAnythingWrapper(BaseModel):
             NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             PrepareForNet(),
         ])
-
-        # Output transform for fixed size
-        self.transform_reverse = Compose([
-            Resize(width=1242, height=375)
-        ])
-        self.transform_reverse = Compose([
-            Resize(width=640, height=480)
-        ])
-        # self.transform_reverse = Compose([
-        #     Resize(width=6048, height=4032)
-        # ])
-        # self.transform_reverse = Compose([
-        #     Resize(width=1024, height=768)
-        # ])
-        # self.transform_reverse = Compose([
-        #     Resize(width=1024, height=1024),
-        # ])
+        
+        # Original dimensions will be set during forward pass
+        self.original_width = None
+        self.original_height = None
 
     def to(self, device):
         """Move model to device."""
@@ -78,6 +65,9 @@ class DepthAnythingWrapper(BaseModel):
                 img = img.squeeze(0)
             img = np.transpose(img, (1, 2, 0))  # CHW -> HWC
         
+        # Store original dimensions before transform
+        self.original_height, self.original_width = img.shape[:2]
+        
         # Apply input transforms
         img = self.transform({"image": img / 255})["image"]
         img = torch.from_numpy(img).unsqueeze(0)
@@ -85,6 +75,7 @@ class DepthAnythingWrapper(BaseModel):
         # Move to correct device
         device = next(self.model.parameters()).device
         img = img.to(device)
+        
         # Inference
         with torch.no_grad():
             depth = self.model(img).squeeze(0)
@@ -92,8 +83,13 @@ class DepthAnythingWrapper(BaseModel):
         # Convert to numpy for reverse transform
         depth = depth.cpu().numpy()
         
-        # Apply reverse transform
-        depth = self.transform_reverse({"image": depth})["image"]
+        # Create adaptive reverse transform based on original dimensions
+        transform_reverse = Compose([
+            Resize(width=self.original_width, height=self.original_height)
+        ])
+        
+        # Apply reverse transform to match original image size
+        depth = transform_reverse({"image": depth})["image"]
         
         # Convert back to tensor and normalize
         depth = torch.from_numpy(depth).float().to(device)
