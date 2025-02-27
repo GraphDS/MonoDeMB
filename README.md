@@ -92,7 +92,7 @@ Below are the benchmark results comparing different monocular depth estimation m
 
 ## Quick Links
 - For detailed guidance on extending the framework, see the sections below
-- For detailed dataset information, look at [DATASETS.md](datasets.md)
+- For detailed dataset information, look at [datasets.md](datasets.md)
 
 # Extending the Framework
 
