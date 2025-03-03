@@ -234,54 +234,70 @@ class GenPerceptWrapper(BaseModel):
             raise
 
     def forward(self, img):
-        """Run inference on image."""
-        try:
-            # Log input details
-            if torch.is_tensor(img):
-                logger.info(f"Input tensor shape: {img.shape}, dtype: {img.dtype}, device: {img.device}")
-                logger.info(f"Input tensor range: [{img.min():.3f}, {img.max():.3f}]")
+        """Run inference on image batch.
+        
+        Args:
+            img: RGB input in BCHW format where B is batch size
             
-            # Convert tensor to PIL Image if needed
-            if torch.is_tensor(img):
-                logger.info("Converting input tensor to PIL Image...")
-                img = img.squeeze().cpu().numpy().transpose(1, 2, 0)  # CHW -> HWC
-                img = Image.fromarray(img)
-                logger.info(f"Converted to PIL Image size: {img.size}")
+        Returns:
+            torch.Tensor: Predicted depth maps, batched
+        """
+        device = img.device if hasattr(img, 'device') else None
+        batch_size = img.shape[0]
+        depth_batch = []
+        
+        logger.info(f"Processing batch of {batch_size} images")
+        
+        for i in range(batch_size):
+            try:
+                # Extract single image from batch
+                single_img = img[i]  # [C, H, W]
+                
+                # Convert tensor to PIL Image
+                logger.info(f"Converting image {i} to PIL format")
+                img_np = single_img.cpu().numpy().transpose(1, 2, 0)  # CHW -> HWC
+                pil_img = Image.fromarray((img_np * 255).astype(np.uint8) if img_np.max() <= 1.0 else img_np.astype(np.uint8))
+                
+                # Run inference
+                logger.info(f"Running inference on image {i}")
+                out = self.pipe(
+                    pil_img,
+                    denoising_steps=1,
+                    ensemble_size=1,
+                    processing_res=self.processing_res,
+                    match_input_res=True,
+                    batch_size=1,
+                    color_map=None,
+                    show_progress_bar=False,
+                    resample_method=self.resample_method,
+                    mode="depth",
+                    fix_timesteps=None,
+                    prompt=""
+                )
 
-            # Run inference
-            logger.info("Running inference...")
-            logger.debug(f"Pipeline config: rgb_blending={getattr(self.pipe, 'rgb_blending', None)}, customized_head={hasattr(self.pipe, 'customized_head')}")
-            
-            out = self.pipe(
-                img,
-                denoising_steps=1,
-                ensemble_size=1,
-                processing_res=self.processing_res,
-                match_input_res=True,
-                batch_size=1,
-                color_map=None,
-                show_progress_bar=False,
-                resample_method=self.resample_method,
-                mode="depth",
-                fix_timesteps=None,
-                prompt=""
-            )
-
-            # Process output
-            # logger.info("Processing output...")
-            depth = torch.from_numpy(out.pred_np).float()
-            # logger.info(f"Depth prediction shape: {depth.shape}")
-            logger.info(f"Depth range: [{depth.min():.3f}, {depth.max():.3f}]")
-            
-            # Move to correct device if needed
-            if torch.is_tensor(img) and hasattr(img, 'device'):
-                depth = depth.to(img.device)
-            
-            logger.info("Inference completed successfully")
-            return depth
-            
-        except Exception as e:
-            logger.error(f"Error during inference: {str(e)}")
-            logger.error(f"Pipeline state: rgb_blending={getattr(self.pipe, 'rgb_blending', None)}, genpercept_pipeline={getattr(self.pipe, 'genpercept_pipeline', None)}")
-            logger.error(f"Head type: {type(getattr(self.pipe, 'customized_head', None))}")
-            raise
+                # Process output
+                depth = torch.from_numpy(out.pred_np).float()
+                logger.info(f"Image {i} depth range: [{depth.min():.3f}, {depth.max():.3f}]")
+                
+                # Move to correct device if needed
+                if device is not None:
+                    depth = depth.to(device)
+                
+                depth_batch.append(depth)
+                
+            except Exception as e:
+                logger.error(f"Error processing image {i}: {str(e)}")
+                # Create a placeholder depth map in case of error
+                if i > 0 and depth_batch:
+                    # Use the same shape as a previous successful image
+                    depth_placeholder = torch.zeros_like(depth_batch[0])
+                else:
+                    # Create a small placeholder if we don't have any successful predictions yet
+                    depth_placeholder = torch.zeros((384, 384), device=device)
+                
+                depth_batch.append(depth_placeholder)
+                logger.warning(f"Using placeholder depth map for image {i}")
+        
+        # Stack all depth maps
+        logger.info(f"Stacking {len(depth_batch)} depth maps")
+        return torch.stack(depth_batch)

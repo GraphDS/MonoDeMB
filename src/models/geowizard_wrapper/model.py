@@ -86,43 +86,55 @@ class GeoWizardWrapper(BaseModel):
         return self
 
     def forward(self, img, steps=10, ensemble_size=3):
-        """Run inference on image.
+        """Run inference on image batch.
         
         Args:
-            img: Input image in range [0,1] and format CHW
+            img: Input image in range [0,1] and format BCHW where B is batch size
             steps: Number of denoising steps
             ensemble_size: Number of predictions to ensemble
-            
+                
         Returns:
-            tuple: (depth_map, normal_map) tensors
+            torch.Tensor: Predicted depth maps, batched
         """
-        # Convert tensor to PIL Image for pipeline
-        if torch.is_tensor(img):
-            # img = img.cpu().numpy().transpose(1, 2, 0)  # CHW -> HWC
-            # img = (img * 255).astype(np.uint8)
-            # img = Image.fromarray(img)
-            img = img.squeeze().cpu().numpy().transpose(1, 2, 0)  # CHW -> HWC
-            img = Image.fromarray(img)
-
-        # Run inference
-        pipe_out = self.pipe(
-            img,
-            denoising_steps=steps,
-            ensemble_size=ensemble_size,
-            processing_res=768,  # Default from paper
-            match_input_res=True,
-            domain=self.domain,
-            color_map="Spectral",
-            show_progress_bar=False
-        )
-
-        # Get predictions
-        depth = torch.from_numpy(pipe_out.depth_np).float()
-        normals = torch.from_numpy(pipe_out.normal_np).float()
+        device = img.device if hasattr(img, 'device') else None
+        batch_size = img.shape[0]
+        depth_batch = []
         
-        # Ensure predictions are on same device as input
-        if torch.is_tensor(img):
-            depth = depth.to(img.device)
-            normals = normals.to(img.device)
+        for i in range(batch_size):
+            # Extract single image from batch
+            single_img = img[i]  # [C, H, W]
             
-        return depth
+            # Convert tensor to PIL Image for pipeline
+            img_np = single_img.cpu().numpy().transpose(1, 2, 0)  # CHW -> HWC
+            
+            # Handle value range
+            if img_np.max() <= 1.0:
+                img_np = (img_np * 255).astype(np.uint8)
+            else:
+                img_np = img_np.astype(np.uint8)
+                
+            pil_img = Image.fromarray(img_np)
+
+            # Run inference
+            pipe_out = self.pipe(
+                pil_img,
+                denoising_steps=steps,
+                ensemble_size=ensemble_size,
+                processing_res=768,  # Default from paper
+                match_input_res=True,
+                domain=self.domain,
+                color_map="Spectral",
+                show_progress_bar=False
+            )
+
+            # Get depth prediction
+            depth = torch.from_numpy(pipe_out.depth_np).float()
+            
+            # Ensure prediction is on same device as input
+            if device is not None:
+                depth = depth.to(device)
+                
+            depth_batch.append(depth)
+        
+        # Stack all depth maps
+        return torch.stack(depth_batch)

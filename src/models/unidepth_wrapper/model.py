@@ -54,27 +54,36 @@ class UniDepthModelWrapper(BaseModel):
         """Run inference on image.
 
         Args:
-            img: RGB input in any format (tensor CHW/HWC or numpy HWC)
+            img: RGB input in BCHW format where B is batch size
 
         Returns:
-            torch.Tensor: Predicted depth map
+            torch.Tensor: Predicted depth maps, batched
         """
-        # Preprocess input
-        img = self.preprocess(img)
-
-        # Create dummy intrinsics
+        device = img.device
+        batch_size = img.shape[0]
+        depth_batch = []
+        
+        # Create dummy intrinsics (same for all images in batch)
         intrinsics = torch.tensor([
             [5.1885790117450188e02, 0, 3.2558244941119034e02],
             [0, 5.1946961112127485e02, 2.5373616633400465e02],
             [0, 0, 1],
-        ]).to(img.device)
-
-        # Run inference
-        with torch.no_grad():
-            predictions = self.model.infer(img, intrinsics)
-            depth = predictions["depth"].squeeze()
-
-            # Normalize depth to [0,1] range
-            depth = (depth - depth.min()) / (depth.max() - depth.min())
-
-        return depth
+        ]).to(device)
+        
+        # Process images one by one for proper normalization
+        for i in range(batch_size):
+            # Extract single image and ensure correct format
+            single_img = img[i:i+1]  # Keep batch dimension as [1,C,H,W]
+            
+            # Run inference
+            with torch.no_grad():
+                predictions = self.model.infer(single_img, intrinsics)
+                depth = predictions["depth"].squeeze()  # Safe to squeeze here as we have single image
+                
+                # Normalize depth to [0,1] range for this specific depth map
+                depth = (depth - depth.min()) / (depth.max() - depth.min())
+                
+            depth_batch.append(depth)
+        
+        # Stack all processed depth maps
+        return torch.stack(depth_batch)

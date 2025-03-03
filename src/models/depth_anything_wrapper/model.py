@@ -53,46 +53,50 @@ class DepthAnythingWrapper(BaseModel):
         """Run inference on image.
 
         Args:
-            img: RGB input in range [0,1] and format CHW
+            img: RGB input in range [0,1] and format BCHW
 
         Returns:
-            torch.Tensor: Predicted depth map
+            torch.Tensor: Predicted depth map, batched
         """
-        # Convert tensor to numpy and correct format
-        if torch.is_tensor(img):
-            img = img.cpu().numpy()
-            if len(img.shape) == 4:
-                img = img.squeeze(0)
-            img = np.transpose(img, (1, 2, 0))  # CHW -> HWC
-        
-        # Store original dimensions before transform
-        self.original_height, self.original_width = img.shape[:2]
-        
-        # Apply input transforms
-        img = self.transform({"image": img / 255})["image"]
-        img = torch.from_numpy(img).unsqueeze(0)
-
-        # Move to correct device
         device = next(self.model.parameters()).device
-        img = img.to(device)
+        batch_size = img.shape[0]
+        depth_batch = []
         
-        # Inference
-        with torch.no_grad():
-            depth = self.model(img).squeeze(0)
-
-        # Convert to numpy for reverse transform
-        depth = depth.cpu().numpy()
+        for i in range(batch_size):
+            # Process each image in the batch individually
+            single_img = img[i]  # Shape: [C, H, W]
+            
+            # Convert tensor to numpy for preprocessing
+            img_np = single_img.cpu().numpy()  # Shape: [C, H, W]
+            img_np = np.transpose(img_np, (1, 2, 0))  # CHW -> HWC
+            
+            # Store original dimensions before transform
+            original_height, original_width = img_np.shape[:2]
+            
+            # Apply input transforms
+            transformed_img = self.transform({"image": img_np / 255})["image"]
+            transformed_img = torch.from_numpy(transformed_img).unsqueeze(0).to(device)
+            
+            # Inference
+            with torch.no_grad():
+                depth = self.model(transformed_img).squeeze(0)
+            
+            # Convert to numpy for reverse transform
+            depth_np = depth.cpu().numpy()
+            
+            # Create adaptive reverse transform based on original dimensions
+            transform_reverse = Compose([
+                Resize(width=original_width, height=original_height)
+            ])
+            
+            # Apply reverse transform to match original image size
+            resized_depth = transform_reverse({"image": depth_np})["image"]
+            
+            # Convert back to tensor and normalize
+            depth_tensor = torch.from_numpy(resized_depth).float().to(device)
+            normalized_depth = (depth_tensor - depth_tensor.min()) / (depth_tensor.max() - depth_tensor.min())
+            
+            depth_batch.append(normalized_depth)
         
-        # Create adaptive reverse transform based on original dimensions
-        transform_reverse = Compose([
-            Resize(width=self.original_width, height=self.original_height)
-        ])
-        
-        # Apply reverse transform to match original image size
-        depth = transform_reverse({"image": depth})["image"]
-        
-        # Convert back to tensor and normalize
-        depth = torch.from_numpy(depth).float().to(device)
-        depth = (depth - depth.min()) / (depth.max() - depth.min())
-
-        return depth
+        # Stack all processed images back into a batch
+        return torch.stack(depth_batch)

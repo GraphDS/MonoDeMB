@@ -41,49 +41,49 @@ class MidasModel(nn.Module):
         """Run inference on image.
         
         Args:
-            img: RGB image tensor in [0,1] range, format CHW
+            img: RGB image tensor in [0,1] range, format BCHW where B is batch size
             
         Returns:
-            torch.Tensor: Predicted depth map
+            torch.Tensor: Predicted depth maps, batched
         """
         device = next(self.model.parameters()).device
+        batch_size = img.shape[0]
+        depth_batch = []
         
-        # Convert tensor input to numpy for transforms
-        if torch.is_tensor(img):
-            # Ensure input is on CPU and correct format
-            # img = img.cpu().float().numpy()
-            # img = np.transpose(img, (1, 2, 0))  # CHW -> HWC
+        for i in range(batch_size):
+            # Process each image in the batch individually
+            single_img = img[i]  # Shape: [C, H, W]
             
-            # # Scale to 0-255 range
-            # img = (img * 255.0).astype(np.uint8)
+            # Convert tensor to numpy for MiDaS transforms
+            img_np = single_img.permute(1, 2, 0).cpu().numpy()  # CHW -> HWC
+            original_size = img_np.shape[:2]
             
-            # Record original size
-            img = img.squeeze().permute(1, 2, 0).cpu().numpy()
-            original_size = img.shape[:2]
+            # Ensure correct range for MiDaS transform
+            if img_np.max() <= 1.0:
+                img_np = (img_np * 255.0).astype(np.uint8)
+                
+            # Apply MiDaS transforms
+            input_tensor = self.transform(img_np)
             
-        else:
-            original_size = img.shape[:2]
-            img = (img * 255.0).astype(np.uint8)
+            # Move to device
+            input_tensor = input_tensor.to(device)
 
-        # Apply MiDaS transforms
-        input_batch = self.transform(img)
+            # Inference
+            with torch.no_grad():
+                prediction = self.model(input_tensor)
+                
+                # Interpolate back to original size
+                prediction = F.interpolate(
+                    prediction.unsqueeze(1),
+                    size=original_size,
+                    mode="bicubic",
+                    align_corners=False,
+                ).squeeze()
+                
+                # Normalize prediction
+                prediction = (prediction - prediction.min()) / (prediction.max() - prediction.min())
+                
+            depth_batch.append(prediction)
         
-        # Move to device
-        input_batch = input_batch.to(device)
-
-        # Inference
-        with torch.no_grad():
-            prediction = self.model(input_batch)
-            
-            # Interpolate back to original size
-            prediction = F.interpolate(
-                prediction.unsqueeze(1),
-                size=original_size,
-                mode="bicubic",
-                align_corners=False,
-            ).squeeze()
-            
-            # Normalize prediction
-            prediction = (prediction - prediction.min()) / (prediction.max() - prediction.min())
-
-        return prediction
+        # Stack all processed images back into a batch
+        return torch.stack(depth_batch)

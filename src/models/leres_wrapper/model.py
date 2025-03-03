@@ -63,41 +63,50 @@ class LeReSWrapper(nn.Module):
         """Run inference on image.
 
         Args:
-            img: RGB image tensor in range [0, 1] and format CHW
+            img: RGB image tensor in range [0, 1] and format BCHW where B is batch size
 
         Returns:
-            torch.Tensor: Predicted depth map
+            torch.Tensor: Predicted depth map, batched
         """
         device = img.device
+        batch_size = img.shape[0]
+        depth_batch = []
         
-        # Convert tensor to numpy for preprocessing
-        img_np = img.squeeze().cpu().numpy()
-        img_np = np.transpose(img_np, (1, 2, 0))  # CHW -> HWC
-
-        # Convert to uint8 and BGR
-        original_size = img_np.shape[:2]
-
-        # Resize to model's expected size
-        A_resize = cv2.resize(img_np.copy(), (448, 448))
-
-        # Convert back to tensor and normalize
-        img_torch = torch.from_numpy(A_resize).float().permute(2, 0, 1) / 255.0  # HWC -> CHW
-        img_torch = img_torch.to(device)
+        for i in range(batch_size):
+            # Process each image in the batch individually
+            single_img = img[i]  # Shape: [C, H, W]
+            
+            # Convert tensor to numpy for preprocessing
+            img_np = single_img.cpu().numpy()  # Shape: [C, H, W]
+            img_np = np.transpose(img_np, (1, 2, 0))  # CHW -> HWC
+            
+            # Get original size
+            original_size = img_np.shape[:2]
+            
+            # Resize to model's expected size
+            A_resize = cv2.resize(img_np.copy(), (448, 448))
+            
+            # Convert back to tensor and normalize
+            img_torch = torch.from_numpy(A_resize).float().permute(2, 0, 1) / 255.0  # HWC -> CHW
+            img_torch = img_torch.to(device)
+            
+            # Normalize
+            img_torch = (img_torch - self.mean) / self.std
+            img_torch = img_torch.unsqueeze(0)  # Add batch dimension for the model
+            
+            # Run inference
+            with torch.no_grad():
+                depth = self.model.inference(img_torch)
+                
+                # Convert to numpy, resize using cv2 and convert back to torch
+                depth_np = depth.cpu().numpy().squeeze()
+                depth_resized = cv2.resize(depth_np, (original_size[1], original_size[0]))
+                depth = torch.from_numpy(depth_resized).to(device)
+                
+                # Normalize depth for visualization
+                depth = (depth - depth.min()) / (depth.max() - depth.min())
+                
+            depth_batch.append(depth)
         
-        # Normalize
-        img_torch = (img_torch - self.mean.to(device)) / self.std.to(device)
-        img_torch = img_torch.unsqueeze(0)
-
-        # Run inference
-        with torch.no_grad():
-            depth = self.model.inference(img_torch)
-
-            # Convert to numpy, resize using cv2 and convert back to torch
-            depth_np = depth.cpu().numpy().squeeze()
-            depth_resized = cv2.resize(depth_np, (original_size[1], original_size[0]))
-            depth = torch.from_numpy(depth_resized).to(device)
-
-            # Normalize depth for visualization
-            depth = (depth - depth.min()) / (depth.max() - depth.min())
-
-        return depth
+        # Stack all processed images back into a batch
+        return torch.stack(depth_batch)

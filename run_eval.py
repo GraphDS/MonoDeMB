@@ -43,7 +43,7 @@ def parse_args():
                        choices=list(MODEL_VARIANTS.keys()),
                        help='Models to test')
     parser.add_argument('--variants', nargs='+', 
-                       default=['vit_small'],
+                       default=['vit_large'],
                        help='Model variants to test')
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to run on')
@@ -206,61 +206,85 @@ def main():
                     
                     # Process through model
                     with torch.no_grad():
-                        # Run inference
+                        # Run inference              
                         depth_pred = model(rgb)
                         
-                        # Prepare for alignment
-                        depth_raw_ts = depth_gt.squeeze()
-                        valid_mask_ts = mask.squeeze()
-                        depth_raw = depth_raw_ts.cpu().numpy()
-                        valid_mask = valid_mask_ts.cpu().numpy()
-                        depth_raw_ts = depth_raw_ts.to(args.device)
-                        valid_mask_ts = valid_mask_ts.to(args.device)
+                        batch_size = rgb.shape[0]
+                        all_metrics = []
+                        
+                        for b in range(batch_size):
+                
+                            # Get single sample from batch
+                            single_depth_pred = depth_pred[b] if batch_size > 1 else depth_pred
+                            single_depth_gt = depth_gt[b]
+                            single_mask = mask[b]
+                            
 
-                        # Handle Kitti dataset if needed
-                        if dataset_name == "kitti":
-                            depth_pred = kitti_benchmark_crop(depth_pred)
+                            depth_raw_ts = single_depth_gt
+                                
+                            valid_mask_ts = single_mask
+                                
+                            depth_raw = depth_raw_ts.cpu().numpy()
+                            valid_mask = valid_mask_ts.cpu().numpy()
+                            
+                            # Handle Kitti dataset if needed
+                            if dataset_name == "kitti" and len(single_depth_pred.shape) > 2:
+                                single_depth_pred = kitti_benchmark_crop(single_depth_pred)
+                                
+                            # Convert to numpy for alignment
+                            depth_pred_np = single_depth_pred.cpu().numpy()
+                            if len(depth_pred_np.shape) == 3 and depth_pred_np.shape[0] == 1:
+                                depth_pred_np = depth_pred_np.squeeze(0)  # Remove channel dim if present
 
-                        # Align and clip depth
-                        depth_pred, scale, shift = align_depth_least_square(
-                            gt_arr=depth_raw,
-                            pred_arr=depth_pred.cpu().numpy(),
-                            valid_mask_arr=valid_mask,
-                            return_scale_shift=True,
-                            max_resolution=args.alignment_max_res,
-                        )
-                        
-                        # Clip to dataset depth range
-                        depth_pred = np.clip(depth_pred, a_min=dataset.min_depth, a_max=dataset.max_depth)
-                        depth_pred_ts = torch.from_numpy(depth_pred).to(args.device)
-                        
-                        # Update metrics
-                        metrics_manager.update(depth_pred_ts, depth_raw_ts, valid_mask_ts)
-                        
-                        # Save visualizations if needed
-                        if args.save_visualizations and vis_count < args.num_vis_samples:
-                            vis_dir = os.path.join(args.output_dir, f"{model_name}_{model_variant}", "visualizations")
-                            os.makedirs(vis_dir, exist_ok=True)
-                            save_visualization(
-                                rgb[0],
-                                depth_gt[0],
-                                depth_pred_ts,
-                                mask[0],
-                                os.path.join(vis_dir, f"sample_{vis_count}.png"),
-                                batch['rgb_path'][0]
+                            # Align and clip depth
+                            aligned_depth, scale, shift = align_depth_least_square(
+                                gt_arr=depth_raw,
+                                pred_arr=depth_pred_np,
+                                valid_mask_arr=valid_mask,
+                                return_scale_shift=True,
+                                max_resolution=args.alignment_max_res,
                             )
-                            vis_count += 1
+                            
+                            # Clip to dataset depth range
+                            aligned_depth = np.clip(aligned_depth, a_min=dataset.min_depth, a_max=dataset.max_depth)
+                            aligned_depth_ts = torch.from_numpy(aligned_depth).to(args.device)
+                            
+                            
+                            # Add batch dimension for metrics update
+                            aligned_depth_ts = aligned_depth_ts.unsqueeze(0).unsqueeze(0)         
+                            depth_raw_ts = depth_raw_ts.unsqueeze(0).unsqueeze(0)    
+                            valid_mask_ts = valid_mask_ts.unsqueeze(0).unsqueeze(0)
+                            
+                            
+                            # Update metrics for this sample
+                            metrics_manager.update(aligned_depth_ts, depth_raw_ts.to(args.device), valid_mask_ts.to(args.device))
+                            
+                            # For visualization and saving, use only the first sample in the batch
+                            if b == 0:
+                                if args.save_visualizations and vis_count < args.num_vis_samples:
+                                    vis_dir = os.path.join(args.output_dir, f"{model_name}_{model_variant}", "visualizations")
+                                    os.makedirs(vis_dir, exist_ok=True)
+                                    save_visualization(
+                                        rgb[0],
+                                        depth_gt[0],
+                                        aligned_depth_ts.squeeze(),  # Remove batch & channel dims for visualization
+                                        mask[0],
+                                        os.path.join(vis_dir, f"sample_{vis_count}.png"),
+                                        batch['rgb_path'][0]
+                                    )
+                                    vis_count += 1
 
-                        # Save depth pairs if needed
-                        if args.save_depth_maps:
-                            depth_save_dir = os.path.join(args.output_dir, f"{model_name}_{model_variant}", "depth_pairs")
-                            save_depth_pair(
-                                rgb[0],
-                                depth_pred_ts,
-                                depth_save_dir,
-                                start_idx,
-                                Path(batch['rgb_path'][0]).stem
-                            )
+                                # Save depth pairs if needed
+                                if args.save_depth_maps:
+                                    depth_save_dir = os.path.join(args.output_dir, f"{model_name}_{model_variant}", "depth_pairs")
+                                    save_depth_pair(
+                                        rgb[0],
+                                        aligned_depth_ts.squeeze(),  # Remove batch & channel dims for saving
+                                        depth_save_dir,
+                                        start_idx,
+                                        Path(batch['rgb_path'][0]).stem
+                                    )
+                    
                     
                     # Log current metrics
                     if start_idx % 50 == 0:
@@ -289,7 +313,7 @@ def main():
             logging.info("-" * 40)
             for metric_name, value in final_metrics.items():
                 logging.info(f"{metric_name:>10}: {value:.4f}")
-                
+            
         except Exception as e:
             logging.error(f"Error processing model {model_name}: {str(e)}")
             continue
