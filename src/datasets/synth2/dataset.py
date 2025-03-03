@@ -143,12 +143,20 @@ class Synth2Dataset(BaseDataset):
         return valid_mask
     
     def _download(self):
+        
+        version = self.config['paths']['root_dir'].split('/')[-1]
+        
         """Download and extract Synth2 dataset if not already present."""
         if os.path.exists(self.root_dir) and len(os.listdir(self.root_dir)) > 0:
             print("Synth2 dataset already exists.")
             return
 
-        url = "https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2.tar.gz"
+        if version == "synth2":
+            url = "https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2.tar.gz"
+        elif version == "synth2_v2":
+            url = "https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2_v2.tar.gz"
+
+
         print("Downloading Synth2 dataset...")
         download_and_extract(
             url=url,
