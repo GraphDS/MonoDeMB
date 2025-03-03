@@ -220,9 +220,8 @@ def main():
                             single_mask = mask[b]
                             
 
-                            depth_raw_ts = single_depth_gt
-                                
-                            valid_mask_ts = single_mask
+                            depth_raw_ts = single_depth_gt.squeeze(0)
+                            valid_mask_ts = single_mask.squeeze(0)
                                 
                             depth_raw = depth_raw_ts.cpu().numpy()
                             valid_mask = valid_mask_ts.cpu().numpy()
