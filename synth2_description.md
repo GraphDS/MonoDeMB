@@ -45,5 +45,9 @@ Where:
 - **Each scene contains multiple sequential frames**
 - **One-to-one correspondence between RGB and depth images**
 
+## Versions and Download
+
+We present 2 versions of our dataset Synth2: [small](https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2.tar.gz) (100 samples, the results showed in the paper) and [full](https://ue-benchmark-dp.obs.ru-moscow-1.hc.sbercloud.ru/synth2_v2.tar.gz) (300 samples)
+
 ## File Correspondence
 For each RGB image in `synth2_rgb/[scene_id]/images/`, there is a corresponding depth map in `synth2_depth/[scene_id]/depth_maps/` with the same filename but different extensions.
